@@ -346,7 +346,7 @@ A dirvish preview dispatcher is a function consumed by
     (while (keywordp (car body)) (dotimes (_ 2) (push (pop body) keywords)))
     `(progn
        (add-to-list
-        'dirvish--available-preview-dispatchers (cons ',name ',keywords))
+        'dirvish--available-preview-dispatchers (cons ',name (list ,@keywords)))
        (defun ,dp-name ,default-arglist (ignore ,@ignore-list) ,@body))))
 
 (defmacro dirvish-define-mode-line (name &optional docstring &rest body)

@@ -40,6 +40,38 @@ The value is a list with 3 elements:
 - icon for path separators [/]"
   :group 'dirvish :type '(repeat (string :tag "path separator")))
 
+(defcustom dirvish-convert-program "convert"
+  "Name of the `convert' program to run."
+  :group 'dirvish :type 'string)
+
+(defcustom dirvish-ffmpegthumbnailer-program "ffmpegthumbnailer"
+  "Name of the `ffmpegthumbnailer' program to run."
+  :group 'dirvish :type 'string)
+
+(defcustom dirvish-mediainfo-program "mediainfo"
+  "Name of the `mediainfo' program to run."
+  :group 'dirvish :type 'string)
+
+(defcustom dirvish-epub-thumbnailer-program "epub-thumbnailer"
+  "Name of the `epub-thumbnailer' program to run."
+  :group 'dirvish :type 'string)
+
+(defcustom dirvish-pdfinfo-program "pdfinfo"
+  "Name of the `pdfinfo' program to run."
+  :group 'dirvish :type 'string)
+
+(defcustom dirvish-pdftoppm-program "pdftoppm"
+  "Name of the `pdftoppm' program to run."
+  :group 'dirvish :type 'string)
+
+(defcustom dirvish-zipinfo-program "zipinfo"
+  "Name of the `zipinfo' program to run."
+  :group 'dirvish :type 'string)
+
+(defcustom dirvish-tar-program "tar"
+  "Name of the `tar' program to run."
+  :group 'dirvish :type 'string)
+
 (defvar dirvish-media--cache-pool '())
 (defvar dirvish-media--auto-cache-timer nil)
 (defcustom dirvish-media-auto-cache-threshold '(500 . 4)
@@ -62,12 +94,13 @@ variable is nil, the auto caching is disabled."
 
 (define-obsolete-variable-alias 'dirvish-media-auto-properties 'dirvish-show-media-properties "Sep 28, 2022")
 (defcustom dirvish-show-media-properties
-  (and (executable-find "mediainfo") (executable-find "pdfinfo") t)
+  (and (executable-find dirvish-mediainfo-program) (executable-find dirvish-pdfinfo-program) t)
   "Show media properties automatically in preview window."
   :group 'dirvish :type 'boolean)
 
 (defconst dirvish-media--embedded-video-thumb
-  (string-match "prefer embedded image" (shell-command-to-string "ffmpegthumbnailer -h")))
+  (string-match "prefer embedded image"
+                (shell-command-to-string (string-join (list dirvish-ffmpegthumbnailer-program "-h") " "))))
 (defconst dirvish-media--img-max-width 2400)
 (defconst dirvish-media--img-scale-h 0.75)
 (defconst dirvish-media--img-scale-w 0.92)
@@ -248,14 +281,17 @@ GROUP-TITLES is a list of group titles."
 (defun dirvish-media--metadata-from-mediainfo (file)
   "Return result string from command `mediainfo' for FILE."
   (read (format "(%s)" (shell-command-to-string
-                        (format "mediainfo --Output='%s' %s"
+                        (format "%s --Output='%s' %s"
+                                dirvish-mediainfo-program
                                 dirvish-media--info
                                 (shell-quote-argument file))))))
 
 (defun dirvish-media--metadata-from-pdfinfo (file)
   "Return result string from command `pdfinfo' for FILE."
   (cl-loop with out = (shell-command-to-string
-                       (format "pdfinfo %s" (shell-quote-argument file)))
+                       (format "%s %s"
+                               dirvish-pdfinfo-program
+                               (shell-quote-argument file)))
            with lines = (remove "" (split-string out "\n"))
            for line in lines
            for (title content) = (split-string line ":\s+")
@@ -558,13 +594,13 @@ GROUP-TITLES is a list of group titles."
 (dirvish-define-preview audio (file ext)
   "Preview audio files by printing its metadata.
 Require: `mediainfo' (executable)"
-  :require ("mediainfo")
-  (when (member ext dirvish-audio-exts) `(shell . ("mediainfo" ,file))))
+  :require (list dirvish-mediainfo-program)
+  (when (member ext dirvish-audio-exts) `(shell . (,dirvish-mediainfo-program ,file))))
 
 (dirvish-define-preview image (file ext preview-window)
   "Preview image files.
 Require: `convert' (executable from `imagemagick' suite)"
-  :require ("convert")
+  :require (list dirvish-convert-program)
   (when (member ext dirvish-image-exts)
     (let* ((w (dirvish-media--img-size preview-window))
            (h (dirvish-media--img-size preview-window 'height))
@@ -574,8 +610,8 @@ Require: `convert' (executable from `imagemagick' suite)"
             ((and (< (file-attribute-size (file-attributes file)) 250000)
                   (member ext '("jpg" "jpeg" "png" "ico" "icns" "bmp" "svg")))
              `(img . ,(create-image file nil nil :max-width w :max-height h)))
-            (t `(cache . ("convert" ,file "-define" "jpeg:extent=300kb" "-resize"
-                          ,(number-to-string w) ,cache)))))))
+            (t `(cache . (,dirvish-convert-program ,file "-define" "jpeg:extent=300kb" "-resize"
+                                                   ,(number-to-string w) ,cache)))))))
 
 (dirvish-define-preview gif (file ext)
   "Preview gif images with animations."
@@ -590,28 +626,28 @@ Require: `convert' (executable from `imagemagick' suite)"
 (dirvish-define-preview video (file ext preview-window)
   "Preview video files.
 Require: `ffmpegthumbnailer' (executable)"
-  :require ("ffmpegthumbnailer")
+  :require (list dirvish-ffmpegthumbnailer-program)
   (when (member ext dirvish-video-exts)
     (let* ((width (dirvish-media--img-size preview-window))
            (height (dirvish-media--img-size preview-window 'height))
            (cache (dirvish-media--cache-path file (format "images/%s" width) ".jpg")))
       (if (file-exists-p cache)
           `(img . ,(create-image cache nil nil :max-width width :max-height height))
-        `(cache . ("ffmpegthumbnailer" "-i" ,file "-o" ,cache "-s"
-                         ,(number-to-string width)
-                         ,(if dirvish-media--embedded-video-thumb "-m" "")))))))
+        `(cache . (,dirvish-ffmpegthumbnailer-program "-i" ,file "-o" ,cache "-s"
+                                                      ,(number-to-string width)
+                                                      ,(if dirvish-media--embedded-video-thumb "-m" "")))))))
 
 (dirvish-define-preview epub (file preview-window)
   "Preview epub files.
 Require: `epub-thumbnailer' (executable)"
-  :require ("epub-thumbnailer")
+  :require (list dirvish-epub-thumbnailer-program)
   (when (equal ext "epub")
     (let* ((width (dirvish-media--img-size preview-window))
            (height (dirvish-media--img-size preview-window 'height))
            (cache (dirvish-media--cache-path file (format "images/%s" width) ".jpg")))
       (if (file-exists-p cache)
           `(img . ,(create-image cache nil nil :max-width width :max-height height))
-        `(cache . ("epub-thumbnailer" ,file ,cache ,(number-to-string width)))))))
+        `(cache . (,dirvish-epub-thumbnailer-program ,file ,cache ,(number-to-string width)))))))
 
 (dirvish-define-preview pdf (file ext)
   "Preview pdf files.
@@ -622,7 +658,7 @@ Require: `pdf-tools' (Emacs package)"
 
 (dirvish-define-preview pdf-preface (file ext preview-window)
   "Display the preface image as preview for pdf files."
-  :require ("pdftoppm")
+  :require (list dirvish-pdftoppm-program)
   (when (equal ext "pdf")
     (let* ((width (dirvish-media--img-size preview-window))
            (height (dirvish-media--img-size preview-window 'height))
@@ -630,16 +666,16 @@ Require: `pdf-tools' (Emacs package)"
            (cache-jpg (concat cache ".jpg")))
       (if (file-exists-p cache-jpg)
           `(img . ,(create-image cache-jpg nil nil :max-width width :max-height height))
-        `(cache . ("pdftoppm" "-jpeg" "-f" "1" "-singlefile" ,file ,cache))))))
+        `(cache . (,dirvish-pdftoppm-program "-jpeg" "-f" "1" "-singlefile" ,file ,cache))))))
 
 (dirvish-define-preview archive (file ext)
   "Preview archive files.
 Require: `zipinfo' (executable)
 Require: `tar' (executable)"
-  :require ("zipinfo" "tar")
-  (cond ((equal ext "zip") `(shell . ("zipinfo" ,file)))
+  :require (list dirvish-zipinfo-program dirvish-tar-program)
+  (cond ((equal ext "zip") `(shell . (,dirvish-zipinfo-program ,file)))
         ((member ext '("tar" "zst" "bz2" "bz" "gz" "xz" "tgz"))
-         `(shell . ("tar" "-tvf" ,file)))))
+         `(shell . (,dirvish-tar-program "-tvf" ,file)))))
 
 (provide 'dirvish-widgets)
 ;;; dirvish-widgets.el ends here

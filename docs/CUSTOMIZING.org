@@ -228,7 +228,7 @@ Dired, you can create a directory previewer that utilizes the ~exa~ command:
 #+begin_src emacs-lisp
   (dirvish-define-preview exa (file)
     "Use `exa' to generate directory preview."
-    :require ("exa") ; tell Dirvish to check if we have the executable
+    :require (list "exa") ; tell Dirvish to check if we have the executable
     (when (file-directory-p file) ; we only interest in directories here
       `(shell . ("exa" "-al" "--color=always" "--icons"
                  "--group-directories-first" ,file))))
